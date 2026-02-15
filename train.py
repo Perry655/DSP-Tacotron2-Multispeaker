@@ -119,6 +119,12 @@ def parse_args(parser):
     dataset.add_argument('--text-cleaners', nargs='*',
                          default=['english_cleaners'], type=str,
                          help='Type of text cleaners for input text')
+    # --- ADD THIS ---
+    dataset.add_argument('--n-speakers', default=10, type=int,
+                         help='Number of speakers for multi-speaker training')
+    dataset.add_argument('--speakers-embedding-dim', default=256, type=int,
+                         help='Dimension of the speaker embedding')
+    # ----------------
     # --- ADD THESE LINES ---
     dataset.add_argument('--n-noise-types', default=4, type=int,
                          help='Number of noise types (e.g., 0=clean, 1=noisy)')

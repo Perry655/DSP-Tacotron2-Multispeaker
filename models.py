@@ -71,8 +71,8 @@ def get_model(model_name, model_config, cpu_run,
         if forward_is_infer:
             class Tacotron2__forward_is_infer(Tacotron2):
                 # Update forward to accept speaker_ids
-                def forward(self, inputs, input_lengths, noise_ids=None):
-                    return self.infer(inputs, input_lengths, noise_ids)
+                def forward(self, inputs, input_lengths, speaker_ids=None,noise_ids=None):
+                    return self.infer(inputs, input_lengths, speaker_ids, noise_ids)
             model = Tacotron2__forward_is_infer(**model_config)
         else:
             model = Tacotron2(**model_config)
@@ -97,6 +97,10 @@ def get_model_config(model_name, args):
     """ Code chooses a model based on name"""
     if model_name == 'Tacotron2':
         model_config = dict(
+            # --- NEW: Multi-Speaker Parameters ---
+            n_speakers=args.n_speakers,
+            speakers_embedding_dim=args.speakers_embedding_dim,
+            # -------------------------------------
             # --- ADD THESE ---
             n_noise_types=args.n_noise_types,
             noise_embedding_dim=args.noise_embedding_dim,
