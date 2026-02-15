@@ -96,7 +96,7 @@ def gen_text(use_synthetic_data):
         noise_ids = torch.tensor([0] * batch_size, dtype=torch.long).cuda()
         # ------------------------------------------
 
-    return (text_padded, input_lengths, speaker_ids)
+    return (text_padded, input_lengths, speaker_ids, noise_ids)
 
 
 def gen_mel(use_synthetic_data, n_mel_channels, fp16):
