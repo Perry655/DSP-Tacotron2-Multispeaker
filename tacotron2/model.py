@@ -599,6 +599,7 @@ class Tacotron2(nn.Module):
     def __init__(self, mask_padding, n_mel_channels,
                  n_symbols, symbols_embedding_dim,
                  n_speakers, speakers_embedding_dim,  # <--- NEW ARGS
+                 n_noise_types, noise_embedding_dim,
                  encoder_kernel_size,
                  encoder_n_convolutions, encoder_embedding_dim,
                  attention_rnn_dim, attention_dim, attention_location_n_filters,
@@ -621,6 +622,10 @@ class Tacotron2(nn.Module):
         self.speakers_embedding = nn.Embedding(n_speakers, speakers_embedding_dim)
         torch.nn.init.xavier_uniform_(self.speakers_embedding.weight)
         # ------------------------------
+        # --- NEW: Noise Embedding ---
+        self.noise_embedding = nn.Embedding(n_noise_types, noise_embedding_dim)
+        torch.nn.init.xavier_uniform_(self.noise_embedding.weight)
+        # ----------------------------
 
         self.encoder = Encoder(encoder_n_convolutions,
                                encoder_embedding_dim,
@@ -628,7 +633,7 @@ class Tacotron2(nn.Module):
         
         # --- CHANGED: Decoder Input Dim ---
         # The decoder now receives (Text Vector + Speaker Vector)
-        decoder_input_dim = encoder_embedding_dim + speakers_embedding_dim
+        decoder_input_dim = encoder_embedding_dim + speakers_embedding_dim + noise_embedding_dim
         # ----------------------------------
 
         self.decoder = Decoder(n_mel_channels, n_frames_per_step,
@@ -648,7 +653,7 @@ class Tacotron2(nn.Module):
     def parse_batch(self, batch):
         # --- CHANGED: Unpack speaker_ids ---
         text_padded, input_lengths, mel_padded, gate_padded, \
-            output_lengths, speaker_ids = batch
+            output_lengths,noise_ids, speaker_ids = batch
             
         text_padded = to_gpu(text_padded).long()
         input_lengths = to_gpu(input_lengths).long()
@@ -657,9 +662,10 @@ class Tacotron2(nn.Module):
         gate_padded = to_gpu(gate_padded).float()
         output_lengths = to_gpu(output_lengths).long()
         speaker_ids = to_gpu(speaker_ids).long() # <--- GPU conversion
+        noise_ids = to_gpu(noise_ids).long() # <--- NEW: GPU conversion
 
         return (
-            (text_padded, input_lengths, mel_padded, max_len, output_lengths, speaker_ids),
+            (text_padded, input_lengths, mel_padded, max_len, output_lengths, speaker_ids, noise_ids),
             (mel_padded, gate_padded))
 
     def parse_output(self, outputs, output_lengths):
@@ -675,16 +681,19 @@ class Tacotron2(nn.Module):
         return outputs
 
     def forward(self, inputs):
-        inputs, input_lengths, targets, max_len, output_lengths, speaker_ids = inputs
+        inputs, input_lengths, targets, max_len, output_lengths, speaker_ids, noise_ids = inputs
         input_lengths, output_lengths = input_lengths.data, output_lengths.data
 
         embedded_inputs = self.embedding(inputs).transpose(1, 2)
         encoder_outputs = self.encoder(embedded_inputs, input_lengths)
         speaker_vec = self.speakers_embedding(speaker_ids)
         speaker_vec_expanded = speaker_vec.unsqueeze(1).expand(-1, max_len, -1)
+        # 2. Noise Vector
+        noise_vec = self.noise_embedding(noise_ids) # <--- NEW
+        noise_vec = noise_vec.unsqueeze(1).expand(-1, max_len, -1) # <--- NEW
         
         # Concatenate: [Batch, Time, Enc_Dim] + [Batch, Time, Spk_Dim]
-        encoder_outputs_combined = torch.cat((encoder_outputs, speaker_vec_expanded), dim=-1)
+        encoder_outputs_combined = torch.cat((encoder_outputs, speaker_vec_expanded, noise_vec), dim=-1)
         # -------------------------------------
 
         mel_outputs, gate_outputs, alignments = self.decoder(
@@ -698,13 +707,14 @@ class Tacotron2(nn.Module):
             output_lengths)
 
 
-    def infer(self, inputs, input_lengths, speaker_id=None):
+    def infer(self, inputs, input_lengths, speaker_id=None, noise_id=None):
         # --- CHANGED: Add speaker_id argument ---
         if speaker_id is None:
              raise ValueError("Inference requires a speaker_id")
 
         embedded_inputs = self.embedding(inputs).transpose(1, 2)
         encoder_outputs = self.encoder.infer(embedded_inputs, input_lengths)
+        time_steps = encoder_outputs.size(1) 
         
         # --- NEW: Inject Speaker Embedding for Inference ---
         # Ensure speaker_id is a tensor [Batch_Size]
@@ -715,10 +725,14 @@ class Tacotron2(nn.Module):
         
         # Expand to match time steps of encoder output
         # encoder_outputs shape: [Batch, Time, Dim]
-        time_steps = encoder_outputs.size(1) 
         speaker_vec_expanded = speaker_vec.unsqueeze(1).expand(-1, time_steps, -1)
+
+        if isinstance(noise_id, int):
+            noise_id = torch.tensor([noise_id] * inputs.size(0)).long().to(inputs.device)
+        noise_vec = self.noise_embedding(noise_id)
+        noise_vec = noise_vec.unsqueeze(1).expand(-1, time_steps, -1)
         
-        encoder_outputs_combined = torch.cat((encoder_outputs, speaker_vec_expanded), dim=-1)
+        encoder_outputs_combined = torch.cat((encoder_outputs, speaker_vec_expanded, noise_vec), dim=-1)
         # --------------------------------------------------
 
         mel_outputs, gate_outputs, alignments, mel_lengths = self.decoder.infer(
@@ -729,5 +743,6 @@ class Tacotron2(nn.Module):
 
         BS = mel_outputs_postnet.size(0)
         alignments = alignments.unfold(1, BS, BS).transpose(0,2)
+
 
         return mel_outputs_postnet, mel_lengths, alignments
