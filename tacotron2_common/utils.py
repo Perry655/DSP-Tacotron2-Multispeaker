@@ -64,12 +64,18 @@ def load_filepaths_and_text(dataset_path, filename, split="|"):
     with open(filename, encoding='utf-8') as f:
         def split_line(root, line):
             parts = line.strip().split(split)
-            if len(parts) > 2:
-                raise Exception(
-                    "incorrect line format for file: {}".format(filename))
+            if len(parts) != 4:  # Ensure we check for 4 parts
+                raise Exception("incorrect line format...")
+            
             path = os.path.join(root, parts[0])
             text = parts[1]
-            return path,text
+            speaker_id = parts[2]
+            noise_id = parts[3]
+            
+            # --- CRITICAL FIX IS HERE ---
+            # You must return ALL 4 items so data_function.py can read them
+            return path, text, speaker_id, noise_id 
+            
         filepaths_and_text = [split_line(dataset_path, line) for line in f]
     return filepaths_and_text
 
