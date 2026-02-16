@@ -26,9 +26,8 @@
 # *****************************************************************************\
 
 import torch
-import random
-import common.layers as layers
-from common.utils import load_wav_to_torch, load_filepaths_and_text, to_gpu
+import tacotron2_common.layers as layers
+from tacotron2_common.utils import load_wav_to_torch, load_filepaths_and_text, to_gpu
 
 
 class MelAudioLoader(torch.utils.data.Dataset):
@@ -37,18 +36,15 @@ class MelAudioLoader(torch.utils.data.Dataset):
         2) computes mel-spectrograms from audio files.
     """
 
-    def __init__(self, audiopaths_and_text, filter_length, hop_length, win_length,
-                 n_mel_channels, sampling_rate, mel_fmin, mel_fmax, segment_length, max_wav_value):
-        self.audiopaths_and_text = load_filepaths_and_text(audiopaths_and_text)
-        self.max_wav_value = max_wav_value
-        self.sampling_rate = sampling_rate
-
-        self.stft = layers.TacotronSTFT(filter_length, hop_length, win_length, n_mel_channels, sampling_rate,
-                                        mel_fmin, mel_fmax)
-
-        self.segment_length = segment_length
-        random.seed(1234)
-        random.shuffle(self.audiopaths_and_text)
+    def __init__(self, dataset_path, audiopaths_and_text, args):
+        self.audiopaths_and_text = load_filepaths_and_text(dataset_path, audiopaths_and_text)
+        self.max_wav_value = args.max_wav_value
+        self.sampling_rate = args.sampling_rate
+        self.stft = layers.TacotronSTFT(
+            args.filter_length, args.hop_length, args.win_length,
+            args.n_mel_channels, args.sampling_rate, args.mel_fmin,
+            args.mel_fmax)
+        self.segment_length = args.segment_length
 
     def get_mel_audio_pair(self, filename):
         audio, sampling_rate = load_wav_to_torch(filename)
@@ -60,7 +56,7 @@ class MelAudioLoader(torch.utils.data.Dataset):
         # Take segment
         if audio.size(0) >= self.segment_length:
             max_audio_start = audio.size(0) - self.segment_length
-            audio_start = random.randint(0, max_audio_start)
+            audio_start = torch.randint(0, max_audio_start + 1, size=(1,)).item()
             audio = audio[audio_start:audio_start+self.segment_length]
         else:
             audio = torch.nn.functional.pad(
@@ -72,7 +68,7 @@ class MelAudioLoader(torch.utils.data.Dataset):
         melspec = self.stft.mel_spectrogram(audio_norm)
         melspec = melspec.squeeze(0)
 
-        return melspec, audio, len(audio)
+        return (melspec, audio, len(audio))
 
     def __getitem__(self, index):
         return self.get_mel_audio_pair(self.audiopaths_and_text[index][0])
@@ -86,5 +82,4 @@ def batch_to_gpu(batch):
     x = to_gpu(x).float()
     y = to_gpu(y).float()
     len_y = to_gpu(torch.sum(len_y))
-
-    return (x, y), y, len_y
+    return ((x, y), y, len_y)
