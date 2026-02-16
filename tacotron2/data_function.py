@@ -35,6 +35,11 @@ class TextMelLoader(torch.utils.data.Dataset):
         # separate filename, text, and speaker_id
         audiopath, text, speaker_id, noise_id = audiopath_text_speaker[0], audiopath_text_speaker[1], audiopath_text_speaker[2], audiopath_text_speaker[3]
         
+        # --- ADD THESE TWO LINES ---
+        speaker_id = int(speaker_id)
+        noise_id = int(noise_id)
+        # ---------------------------
+        
         len_text = len(text)
         text = self.get_text(text)
         mel = self.get_mel(audiopath)
