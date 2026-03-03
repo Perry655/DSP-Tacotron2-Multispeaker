@@ -52,11 +52,6 @@ def parse_args(parser):
                         help='full path to the Tacotron2 model checkpoint file')
     parser.add_argument('--waveglow', type=str,#change vocoder
                         help='full path to the WaveGlow model checkpoint file')
-    parser.add_argument('--hifigan', type=str,
-                        help='full path to the HiFi-GAN model checkpoint file')
-    parser.add_argument('--hifigan_config', type=str,
-                        help='full path to the HiFi-GAN config.json file')
-    # ---------------------------
     parser.add_argument('-s', '--sigma-infer', default=0.6, type=float)#change vocoder
     parser.add_argument('-d', '--denoising-strength', default=0.01, type=float)
     parser.add_argument('-sr', '--sampling-rate', default=22050, type=int,
