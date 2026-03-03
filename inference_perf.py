@@ -96,7 +96,7 @@ def gen_text(use_synthetic_data):
         noise_ids = torch.tensor([0] * batch_size, dtype=torch.long).cuda()
         # ------------------------------------------
 
-    return (text_padded, input_lengths, speaker_ids)
+    return (text_padded, input_lengths, speaker_ids, noise_ids)
 
 
 def gen_mel(use_synthetic_data, n_mel_channels, fp16):
@@ -176,17 +176,6 @@ def main():
                 audios = model(mel_padded)
                 audios = audios.float()
             num_items = audios.size(0)*audios.size(1)
-
-        # --- ADD THIS HiFi-GAN BLOCK ---
-        if args.model_name == 'HiFi-GAN':
-            n_mel_channels = 80 # Standard for HiFi-GAN
-            mel_padded = gen_mel(args.synth_data, n_mel_channels, args.fp16)
-            
-            with torch.no_grad(), MeasureTime(measurements, "inference_time"):
-                audios = model(mel_padded) 
-                audios = audios.squeeze(1) # HiFi-GAN usually outputs (B, 1, T)
-            num_items = audios.size(0) * audios.size(1)
-        # -------------------------------
 
         if i >= warmup_iters:
             DLLogger.log(step=(i-warmup_iters,), data={"latency": measurements['inference_time']})
