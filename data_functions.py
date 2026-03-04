@@ -32,11 +32,23 @@ from waveglow.data_function import MelAudioLoader
 from tacotron2.data_function import batch_to_gpu as batch_to_gpu_tacotron2
 from waveglow.data_function import batch_to_gpu as batch_to_gpu_waveglow
 
+# 1. ADD THIS: Import HiFi-GAN's dataset
+from hifigan.data_function import MelDataset
+
+# Optional: If you create a batch_to_gpu function for HiFi-GAN later, import it here.
+# For now, we will define a simple lambda or dummy function for it.
+def batch_to_gpu_hifigan(batch):
+    # HiFi-GAN's dataset returns (mel, audio, filename, mel_loss)
+    mel, audio, filename, mel_loss = batch
+    return mel.cuda(non_blocking=True), audio.cuda(non_blocking=True)
 
 def get_collate_function(model_name, n_frames_per_step=1):
     if model_name == 'Tacotron2':
         collate_fn = TextMelCollate(n_frames_per_step)
     elif model_name == 'WaveGlow': # change to right vocoder
+        collate_fn = torch.utils.data.dataloader.default_collate
+    elif model_name == 'HiFi-GAN': 
+        # HiFi-GAN outputs fixed-size segments, so default collate works perfectly
         collate_fn = torch.utils.data.dataloader.default_collate
     else:
         raise NotImplementedError(
@@ -50,6 +62,24 @@ def get_data_loader(model_name, dataset_path, audiopaths_and_text, args):
         data_loader = TextMelLoader(dataset_path, audiopaths_and_text, args)
     elif model_name == 'WaveGlow': # change to right vocoder
         data_loader = MelAudioLoader(dataset_path, audiopaths_and_text, args)
+    elif model_name == 'HiFi-GAN': 
+        # Extract just the file paths (ignore text, speaker_id, noise_id)
+        audio_files = [x[0] for x in audiopaths_and_text] 
+        
+        data_loader = MelDataset(
+            training_files=audio_files,
+            segment_size=args.segment_size, 
+            n_fft=args.filter_length,
+            num_mels=args.n_mel_channels,
+            hop_size=args.hop_length,
+            win_size=args.win_length,
+            sampling_rate=args.sampling_rate,
+            fmin=args.mel_fmin,
+            fmax=args.mel_fmax,
+            fmax_loss=args.mel_fmax_loss if hasattr(args, 'mel_fmax_loss') else args.mel_fmax,
+            fine_tuning=args.fine_tuning if hasattr(args, 'fine_tuning') else False,
+            base_mels_path=args.input_mels_dir if hasattr(args, 'input_mels_dir') else None
+        )
     else:
         raise NotImplementedError(
             "unknown data loader requested: {}".format(model_name))
@@ -62,6 +92,9 @@ def get_batch_to_gpu(model_name):
         batch_to_gpu = batch_to_gpu_tacotron2
     elif model_name == 'WaveGlow': # change to right vocoder
         batch_to_gpu = batch_to_gpu_waveglow
+    # 4. ADD THIS: Route HiFi-GAN GPU mapping
+    elif model_name == 'HiFi-GAN':
+        batch_to_gpu = batch_to_gpu_hifigan
     else:
         raise NotImplementedError(
             "unknown batch_to_gpu requested: {}".format(model_name))
