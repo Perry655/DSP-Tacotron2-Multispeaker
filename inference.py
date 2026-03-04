@@ -62,6 +62,12 @@ def parse_args(parser):
                         help='full path to the Tacotron2 model checkpoint file')
     parser.add_argument('--waveglow', type=str,# change vocoder
                         help='full path to the WaveGlow model checkpoint file')# change vocoder
+    # --- ADD HIFI-GAN ---
+    parser.add_argument('--hifigan', type=str,
+                        help='full path to the HiFi-GAN model checkpoint file')
+    #parser.add_argument('--hifigan_config', type=str,
+    #                    help='full path to the HiFi-GAN config.json file')
+    # ---------------------------
     parser.add_argument('-s', '--sigma-infer', default=0.9, type=float)
     parser.add_argument('-d', '--denoising-strength', default=0.01, type=float)
     parser.add_argument('-sr', '--sampling-rate', default=22050, type=int,
@@ -214,17 +220,24 @@ def main():
 
     tacotron2 = load_and_setup_model('Tacotron2', parser, args.tacotron2,
                                      args.fp16, args.cpu, forward_is_infer=True)
-    waveglow = load_and_setup_model('WaveGlow', parser, args.waveglow,# change vocoder
-                                    args.fp16, args.cpu, forward_is_infer=True,
-                                    jittable=True)
-    denoiser = Denoiser(waveglow)# change vocoder
-    if not args.cpu:
-        denoiser.cuda()
-
-    waveglow.make_ts_scriptable()# change vocoder
-    jitted_waveglow = torch.jit.script(waveglow)# change vocoder
-    # jitted_tacotron2 = torch.jit.script(tacotron2)
     jitted_tacotron2 = tacotron2  # Just use the normal model
+
+    # --- CONDITIONALLY LOAD THE VOCODERS ---
+    if args.waveglow is not None:
+        waveglow = load_and_setup_model('WaveGlow', parser, args.waveglow,
+                                        args.fp16, args.cpu, forward_is_infer=True,
+                                        jittable=True)
+        denoiser = Denoiser(waveglow)
+        if not args.cpu:
+            denoiser.cuda()
+
+        waveglow.make_ts_scriptable()
+        jitted_waveglow = torch.jit.script(waveglow)
+        
+    if args.hifigan is not None:
+        hifigan = load_and_setup_model('HiFi-GAN', parser, args.hifigan,
+                                       args.fp16, args.cpu, forward_is_infer=True)
+    # ---------------------------------------
 
     texts = []
     try:
@@ -249,10 +262,17 @@ def main():
             input_lengths = input_lengths.cuda()
             dummy_speaker_id = dummy_speaker_id.cuda() # Move to GPU
             dummy_noise_id = dummy_noise_id.cuda() # Move to GPU
+            
         for i in range(3):
             with torch.no_grad():
                 mel, mel_lengths, _ = jitted_tacotron2(sequence, input_lengths, dummy_speaker_id, dummy_noise_id)
-                _ = jitted_waveglow(mel) #change vocoder
+                
+                # --- CONDITIONALLY WARMUP ---
+                if args.waveglow is not None:
+                    _ = jitted_waveglow(mel)
+                elif args.hifigan is not None:
+                    _ = hifigan(mel)
+                # ----------------------------
 
     measurements = {}
 
@@ -274,22 +294,42 @@ def main():
     with torch.no_grad(), MeasureTime(measurements, "tacotron2_time", args.cpu):
         mel, mel_lengths, alignments = jitted_tacotron2(sequences_padded, input_lengths, speaker_ids, noise_ids)
 
-    with torch.no_grad(), MeasureTime(measurements, "waveglow_time", args.cpu):#change vocoder
-        audios = jitted_waveglow(mel, sigma=args.sigma_infer)#change vocoder
-        audios = audios.float()
-    with torch.no_grad(), MeasureTime(measurements, "denoiser_time", args.cpu):
-        audios = denoiser(audios, strength=args.denoising_strength).squeeze(1)
+    # --- CONDITIONALLY RUN VOCODER INFERENCE ---
+    if args.waveglow is not None:
+        with torch.no_grad(), MeasureTime(measurements, "waveglow_time", args.cpu):
+            audios = jitted_waveglow(mel, sigma=args.sigma_infer)
+            audios = audios.float()
+        with torch.no_grad(), MeasureTime(measurements, "denoiser_time", args.cpu):
+            audios = denoiser(audios, strength=args.denoising_strength).squeeze(1)
+
+    elif args.hifigan is not None:
+        # Properly labeled "hifigan_time", and no dummy variables needed!
+        with torch.no_grad(), MeasureTime(measurements, "hifigan_time", args.cpu): 
+            audios = hifigan(mel).squeeze(1)
+            audios = audios.float()
+    # -------------------------------------------
 
     print("Stopping after",mel.size(2),"decoder steps")
     tacotron2_infer_perf = mel.size(0)*mel.size(2)/measurements['tacotron2_time']
-    waveglow_infer_perf = audios.size(0)*audios.size(1)/measurements['waveglow_time']#change vocoder
 
     DLLogger.log(step=0, data={"tacotron2_items_per_sec": tacotron2_infer_perf})
     DLLogger.log(step=0, data={"tacotron2_latency": measurements['tacotron2_time']})
-    DLLogger.log(step=0, data={"waveglow_items_per_sec": waveglow_infer_perf})#change vocoder
-    DLLogger.log(step=0, data={"waveglow_latency": measurements['waveglow_time']})#change vocoder
-    DLLogger.log(step=0, data={"denoiser_latency": measurements['denoiser_time']})#change vocoder
-    DLLogger.log(step=0, data={"latency": (measurements['tacotron2_time']+measurements['waveglow_time']+measurements['denoiser_time'])})#change vocoder
+
+    # --- CONDITIONALLY LOG VOCODER STATS ---
+    if args.waveglow is not None:
+        waveglow_infer_perf = audios.size(0)*audios.size(1)/measurements['waveglow_time']
+        DLLogger.log(step=0, data={"waveglow_items_per_sec": waveglow_infer_perf})
+        DLLogger.log(step=0, data={"waveglow_latency": measurements['waveglow_time']})
+        DLLogger.log(step=0, data={"denoiser_latency": measurements['denoiser_time']})
+        DLLogger.log(step=0, data={"latency": (measurements['tacotron2_time'] + measurements['waveglow_time'] + measurements['denoiser_time'])})
+
+    elif args.hifigan is not None:
+        hifigan_infer_perf = audios.size(0)*audios.size(1)/measurements['hifigan_time']
+        DLLogger.log(step=0, data={"hifigan_items_per_sec": hifigan_infer_perf})
+        DLLogger.log(step=0, data={"hifigan_latency": measurements['hifigan_time']})
+        # HiFi-GAN has no denoiser, so we just add Tacotron + HiFi-GAN
+        DLLogger.log(step=0, data={"latency": (measurements['tacotron2_time'] + measurements['hifigan_time'])})
+    # ---------------------------------------
 
     for i, audio in enumerate(audios):
 
