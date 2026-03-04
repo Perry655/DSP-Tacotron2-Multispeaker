@@ -254,7 +254,7 @@ def load_checkpoint(model, optimizer, scaler, epoch, filepath, local_rank):
 
     epoch[0] = checkpoint['epoch']+1
     device_id = local_rank % torch.cuda.device_count()
-    torch.cuda.set_rng_state(checkpoint['cuda_rng_state_all'][device_id])
+    #torch.cuda.set_rng_state(checkpoint['cuda_rng_state_all'][device_id])
     if 'random_rng_states_all' in checkpoint:
         torch.random.set_rng_state(checkpoint['random_rng_states_all'][device_id])
     elif 'random_rng_state' in checkpoint:
