@@ -49,8 +49,8 @@ def parse_args(parser):
     """
     parser.add_argument('-i', '--input', type=str, required=True,
                         help='full path to the input text (phareses separated by new line)')
-    parser.add_argument('--speaker-id', type=int, default=0, # Bago ito
-                        help='ID of the speaker to use for inference')
+#    parser.add_argument('--speaker-id', type=int, default=0, # Bago ito
+#                        help='ID of the speaker to use for inference')
     # --- ADD THIS ---
     parser.add_argument('--noise-id', type=int, default=0,
                         help='Noise ID for inference (0 for clean, 1 for noisy)')
