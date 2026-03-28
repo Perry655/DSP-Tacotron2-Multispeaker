@@ -79,8 +79,8 @@ def parse_args(parser):
     parser.add_argument('-bs', '--batch-size', type=int, default=1,
                         help='Batch size')
     # --- ADD THIS ---
-    parser.add_argument('--speaker-id', type=int, default=0,
-                        help='Speaker ID for multi-speaker inference')
+    #parser.add_argument('--speaker-id', type=int, default=0,
+    #                    help='Speaker ID for multi-speaker inference')
     # ----------------
     # --- ADD THIS ---
     parser.add_argument('--noise-id', type=int, default=0,
