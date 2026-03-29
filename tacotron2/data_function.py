@@ -17,7 +17,7 @@ class TextMelLoader(torch.utils.data.Dataset):
         3) computes mel-spectrograms from audio files.
     """
     def __init__(self, dataset_path, audiopaths_and_text, args):
-        # Assumes file format: filepath|text|noise_id
+        # Assumes file format: filepath|text|speaker_id
         self.audiopaths_and_text = load_filepaths_and_text(dataset_path, audiopaths_and_text)
         self.text_cleaners = args.text_cleaners
         self.max_wav_value = args.max_wav_value
@@ -33,14 +33,19 @@ class TextMelLoader(torch.utils.data.Dataset):
     def get_mel_text_speaker_pair(self, audiopath_text_speaker):
         # [CHANGE 1] Unpack 3 items instead of 2
         # separate filename, text, and speaker_id
-        audiopath, text, noise_id = audiopath_text_speaker[0], audiopath_text_speaker[1], audiopath_text_speaker[2]
+        audiopath, text, speaker_id, noise_id = audiopath_text_speaker[0], audiopath_text_speaker[1], audiopath_text_speaker[2], audiopath_text_speaker[3]
+        
+        # --- ADD THESE TWO LINES ---
+        speaker_id = int(speaker_id)
+        noise_id = int(noise_id)
+        # ---------------------------
         
         len_text = len(text)
         text = self.get_text(text)
         mel = self.get_mel(audiopath)
         
         # [CHANGE 2] Return speaker_id in the tuple
-        return (text, mel, len_text, noise_id)
+        return (text, mel, len_text, speaker_id, noise_id)
 
     def get_mel(self, filename):
         if not self.load_mel_from_disk:
@@ -117,26 +122,26 @@ class TextMelCollate():
 
         # [CHANGE 3] Collect speaker_ids
         len_x = []
-#        speaker_ids = []
+        speaker_ids = []
         noise_ids = [] # <--- NEW
         for i in range(len(ids_sorted_decreasing)):
             len_x.append(batch[ids_sorted_decreasing[i]][2])
             # Extracts speaker_id (index 3 from get_mel_text_speaker_pair)
-#            speaker_ids.append(batch[ids_sorted_decreasing[i]][3])
-            noise_ids.append(batch[ids_sorted_decreasing[i]][3]) # <--- NEW: Extract noise_id
+            speaker_ids.append(batch[ids_sorted_decreasing[i]][3])
+            noise_ids.append(batch[ids_sorted_decreasing[i]][4]) # <--- NEW: Extract noise_id
 
         len_x = torch.Tensor(len_x)
         # Convert list of speaker IDs to a Tensor
-#        speaker_ids = torch.LongTensor(speaker_ids)
+        speaker_ids = torch.LongTensor(speaker_ids)
         noise_ids = torch.LongTensor(noise_ids) # <--- NEW: Convert to tensor
 
         return text_padded, input_lengths, mel_padded, gate_padded, \
-            output_lengths, len_x, noise_ids
+            output_lengths, len_x, speaker_ids, noise_ids
 
 def batch_to_gpu(batch):
     # [CHANGE 4] Unpack and transfer speaker_ids
     text_padded, input_lengths, mel_padded, gate_padded, \
-        output_lengths, len_x, noise_ids = batch
+        output_lengths, len_x, speaker_ids, noise_ids = batch
     
     text_padded = to_gpu(text_padded).long()
     input_lengths = to_gpu(input_lengths).long()
@@ -144,11 +149,11 @@ def batch_to_gpu(batch):
     mel_padded = to_gpu(mel_padded).float()
     gate_padded = to_gpu(gate_padded).float()
     output_lengths = to_gpu(output_lengths).long()
-    #speaker_ids = to_gpu(speaker_ids).long()
+    speaker_ids = to_gpu(speaker_ids).long()
     noise_ids = to_gpu(noise_ids).long() # <--- NEW
     
     # [CHANGE 5] Add speaker_ids to input tuple 'x'
-    x = (text_padded, input_lengths, mel_padded, max_len, output_lengths, noise_ids)
+    x = (text_padded, input_lengths, mel_padded, max_len, output_lengths, speaker_ids, noise_ids)
     y = (mel_padded, gate_padded)
     len_x = torch.sum(output_lengths)
     
