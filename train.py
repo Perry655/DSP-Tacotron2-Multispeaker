@@ -75,7 +75,7 @@ def parse_args(parser):
     training = parser.add_argument_group('training setup')
     training.add_argument('--epochs', type=int, required=True,
                           help='Number of total epochs to run')
-    training.add_argument('--epochs-per-checkpoint', type=int, default=50,
+    training.add_argument('--epochs-per-checkpoint', type=int, default=1,
                           help='Number of epochs per checkpoint')
     training.add_argument('--checkpoint-path', type=str, default='',
                           help='Checkpoint path to resume training')
@@ -120,14 +120,14 @@ def parse_args(parser):
                          default=['english_cleaners'], type=str,
                          help='Type of text cleaners for input text')
     # --- ADD THIS ---
-#    dataset.add_argument('--n-speakers', default=11, type=int,
-#                         help='Number of speakers for multi-speaker training')
-#    dataset.add_argument('--speakers-embedding-dim', default=256, type=int,
-#                         help='Dimension of the speaker embedding')
+    dataset.add_argument('--n-speakers', default=11, type=int,
+                         help='Number of speakers for multi-speaker training')
+    dataset.add_argument('--speakers-embedding-dim', default=256, type=int,
+                         help='Dimension of the speaker embedding')
     # ----------------
     # --- ADD THESE LINES ---
     dataset.add_argument('--n-noise-types', default=4, type=int,
-                         help='Number of noise types')
+                         help='Number of noise types (e.g., 0=clean, 1=noisy)')
     dataset.add_argument('--noise-embedding-dim', default=64, type=int,
                          help='Dimension of the noise embedding')
     # -----------------------
@@ -254,7 +254,7 @@ def load_checkpoint(model, optimizer, scaler, epoch, filepath, local_rank):
 
     epoch[0] = checkpoint['epoch']+1
     device_id = local_rank % torch.cuda.device_count()
-    torch.cuda.set_rng_state(checkpoint['cuda_rng_state_all'][device_id])
+    #torch.cuda.set_rng_state(checkpoint['cuda_rng_state_all'][device_id])
     if 'random_rng_states_all' in checkpoint:
         torch.random.set_rng_state(checkpoint['random_rng_states_all'][device_id])
     elif 'random_rng_state' in checkpoint:
@@ -287,7 +287,7 @@ def validate(model, criterion, valset, epoch, batch_iter, batch_size,
     """Handles all the validation scoring and printing"""
     with evaluating(model), torch.no_grad():
         val_sampler = DistributedSampler(valset) if distributed_run else None
-        val_loader = DataLoader(valset, num_workers=1, shuffle=False,
+        val_loader = DataLoader(valset, num_workers=0, shuffle=False,
                                 sampler=val_sampler,
                                 batch_size=batch_size, pin_memory=False,
                                 collate_fn=collate_fn,
@@ -449,7 +449,7 @@ def main():
         train_sampler = None
         shuffle = True
 
-    train_loader = DataLoader(trainset, num_workers=1, shuffle=shuffle,
+    train_loader = DataLoader(trainset, num_workers=0, shuffle=shuffle, #num_workers
                               sampler=train_sampler,
                               batch_size=args.batch_size, pin_memory=False,
                               drop_last=True, collate_fn=collate_fn)

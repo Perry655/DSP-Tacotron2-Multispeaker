@@ -33,7 +33,7 @@ from tacotron2.model import Tacotron2
 from waveglow.model import WaveGlow
 
 # --- HiFi-GAN Additions ---
-#from hifigan.models import Generator as HiFiGAN
+from hifigan.models import Generator as HiFiGAN
 import json
 import torch
 
@@ -51,6 +51,9 @@ def model_parser(model_name, parser, add_help=False):
     if model_name == 'WaveGlow':
         from waveglow.arg_parser import waveglow_parser
         return waveglow_parser(parser, add_help)
+    if model_name == 'HiFi-GAN':
+        from hifigan.arg_parser import hifigan_parser
+        return parse_hifigan_args(parser, add_help)
     else:
         raise NotImplementedError(model_name)
 
@@ -93,15 +96,15 @@ def get_model(model_name, model_config, cpu_run,
             model.forward = model.infer
 
     # --- ADD THIS ---
-#    elif model_name == 'HiFi-GAN':
-#        # HiFi-GAN expects an 'AttrDict' of its config parameters
-#        model = HiFiGAN(model_config)
+    elif model_name == 'HiFi-GAN':
+        # HiFi-GAN expects an 'AttrDict' of its config parameters
+        model = HiFiGAN(model_config)
         
         # HiFi-GAN doesn't need a custom infer method, its forward pass 
         # is already designed to output audio. But we can remove weight 
         # norm for faster inference!
-#        if forward_is_infer:
-#            model.remove_weight_norm()
+        if forward_is_infer:
+            model.remove_weight_norm()
     # ----------------
 
     else:
@@ -120,8 +123,8 @@ def get_model_config(model_name, args):
     if model_name == 'Tacotron2':
         model_config = dict(
             # --- NEW: Multi-Speaker Parameters ---
-#            n_speakers=args.n_speakers,
-#            speakers_embedding_dim=args.speakers_embedding_dim,
+            n_speakers=args.n_speakers,
+            speakers_embedding_dim=args.speakers_embedding_dim,
             # -------------------------------------
             # --- ADD THESE ---
             n_noise_types=args.n_noise_types,
