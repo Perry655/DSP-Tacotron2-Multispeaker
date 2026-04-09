@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dsp-tacotron2-multispeaker"
+version = "0.1.0"
+description = "Multi-speaker Tacotron2 with WaveGlow/HifiGAN vocoder"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "matplotlib",
+    "numpy",
+    "inflect",
+    "librosa",
+    "scipy",
+    "resampy==0.3.1",
+    "dllogger @ git+https://github.com/NVIDIA/dllogger@v0.1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "black",
+    "ruff",
+]
+
+[tool.setuptools.packages.find]
+include = ["tacotron2*", "waveglow*", "hifigan*", "common*", "tensorrt*"]
+
+[tool.setuptools.package-data]
+tacotron2 = ["text/**/*"]
+common = ["text/**/*"]
