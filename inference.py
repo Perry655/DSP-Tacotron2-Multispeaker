@@ -55,10 +55,18 @@ def parse_args(parser):
     parser.add_argument('--n-speakers', type=int, default=1,
                         help='Number of speakers in the model')
     # ----------------------------------
+    # --- ADDED THIS ---
+    parser.add_argument('--speakers-embedding-dim', type=int, default=256,
+                        help='Dimension size of the speaker embedding layer')
+    # ------------------
     # --- ADD THIS ---
     parser.add_argument('--noise-id', type=int, default=0,
                         help='Noise ID for inference (0 for clean, 1 for noisy)')
     # ----------------
+    # --- ADDED THIS ---
+    parser.add_argument('--noise-embedding-dim', type=int, default=256,
+                        help='Dimension size of the noise embedding layer')
+    # ------------------
     parser.add_argument('-o', '--output', required=True,
                         help='output folder to save audio (file per phrase)')
     parser.add_argument('--suffix', type=str, default="", help="output filename suffix")
