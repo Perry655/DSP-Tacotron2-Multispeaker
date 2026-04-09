@@ -51,6 +51,10 @@ def parse_args(parser):
                         help='full path to the input text (phareses separated by new line)')
     parser.add_argument('--speaker-id', type=int, default=0, # Bago ito
                         help='ID of the speaker to use for inference')
+    # --- NEW: ADDED N-SPEAKERS HERE ---
+    parser.add_argument('--n-speakers', type=int, default=1,
+                        help='Number of speakers in the model')
+    # ----------------------------------
     # --- ADD THIS ---
     parser.add_argument('--noise-id', type=int, default=0,
                         help='Noise ID for inference (0 for clean, 1 for noisy)')
