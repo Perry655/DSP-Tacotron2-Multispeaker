@@ -64,7 +64,7 @@ def parse_args(parser):
                         help='Noise ID for inference (0 for clean, 1 for noisy)')
     # ----------------
     # --- ADDED THIS ---
-    parser.add_argument('--noise-embedding-dim', type=int, default=256,
+    parser.add_argument('--noise-embedding-dim', type=int, default=64,
                         help='Dimension size of the noise embedding layer')
     # ------------------
     parser.add_argument('-o', '--output', required=True,
