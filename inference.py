@@ -236,6 +236,15 @@ def main():
 
     tacotron2 = load_and_setup_model('Tacotron2', parser, args.tacotron2,
                                      args.fp16, args.cpu, forward_is_infer=True)
+
+    # --- NEW: HACK TO OVERRIDE THE GATE THRESHOLD ---
+    try:
+        tacotron2.decoder.gate_threshold = args.gate_threshold
+        print(f"🔧 Gate threshold successfully set to: {args.gate_threshold}")
+    except AttributeError:
+        pass
+    # -----------------------------------------------
+
     jitted_tacotron2 = tacotron2  # Just use the normal model
 
     # --- CONDITIONALLY LOAD THE VOCODERS ---
