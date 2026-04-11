@@ -55,6 +55,8 @@ def parse_args(parser):
     parser.add_argument('--n-speakers', type=int, default=1,
                         help='Number of speakers in the model')
     # ----------------------------------
+    parser.add_argument('--gate-threshold', type=float, default=0.5,
+                        help='Lower this to 0.2 or 0.1 if model keeps mumbling at the end')
     # --- ADDED THIS ---
     parser.add_argument('--speakers-embedding-dim', type=int, default=256,
                         help='Dimension size of the speaker embedding layer')
@@ -234,6 +236,15 @@ def main():
 
     tacotron2 = load_and_setup_model('Tacotron2', parser, args.tacotron2,
                                      args.fp16, args.cpu, forward_is_infer=True)
+
+    # --- NEW: HACK TO OVERRIDE THE GATE THRESHOLD ---
+    try:
+        tacotron2.decoder.gate_threshold = args.gate_threshold
+        print(f"🔧 Gate threshold successfully set to: {args.gate_threshold}")
+    except AttributeError:
+        pass
+    # -----------------------------------------------
+
     jitted_tacotron2 = tacotron2  # Just use the normal model
 
     # --- CONDITIONALLY LOAD THE VOCODERS ---
